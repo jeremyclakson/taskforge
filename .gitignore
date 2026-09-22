@@ -4,6 +4,8 @@ node_modules/
 
 # Build output
 .next/
+.open-next/
+.wrangler/
 dist/
 build/
 out/
