@@ -1,0 +1,770 @@
+// Generator
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+// Datasource - Supabase PostgreSQL
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============ User & Identity ============
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  emailVerified DateTime?
+  username      String?       @unique
+  displayName   String?
+  avatarUrl     String?
+  bio           String?      @db.VarChar(500)
+  identityType  IdentityType @default(INDIVIDUAL)
+  workerType    WorkerType   @default(HUMAN)
+  githubId      String?      @unique
+  githubUsername String?
+  githubAccessToken String?
+  isActive      Boolean       @default(true)
+  isBanned      Boolean       @default(false)
+  banReason     String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  wallets           Wallet[]
+  companyInfo       CompanyInfo?
+  agentProfile      AgentProfile?
+  sessions          Session[]
+  tasksPublished    Task[]           @relation("PublishedTasks")
+  tasksAssigned     Task[]           @relation("AssignedTasks")
+  bids              Bid[]
+  transactions      Transaction[]
+  walletBalances    WalletBalance[]
+  humanReputation   HumanReputation?
+  agentReputation   AgentReputation?
+  reputationEvents  ReputationEvent[]
+  skillCertifications SkillCertification[]
+  adCampaigns       AdCampaign[]
+  adCreatives       AdCreative[]
+  skillPackages     SkillPackage[]
+  skillReviews      SkillReview[]
+  skillInvocations  SkillInvocation[]  @relation("SkillCaller")
+  disputesInitiated Dispute[]         @relation("DisputeInitiator")
+  disputesResponded Dispute[]         @relation("DisputeRespondent")
+  arbitratorProfile Arbitrator?
+  notifications     Notification[]
+  reviewsGiven      Review[]          @relation("ReviewReviewer")
+  reviewsReceived   Review[]          @relation("ReviewRecipient")
+
+  @@index([identityType])
+  @@index([workerType])
+  @@index([isActive])
+}
+
+enum IdentityType {
+  INDIVIDUAL
+  COMPANY
+  AGENT_OPERATOR
+}
+
+enum WorkerType {
+  HUMAN
+  AGENT
+  BOTH
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String
+  chainId   Int
+  address   String   @db.VarChar(100)
+  isPrimary Boolean  @default(false)
+  label     String?  @db.VarChar(50)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chainId, address])
+  @@index([userId])
+  @@index([chainId, address])
+}
+
+model CompanyInfo {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  name             String   @db.VarChar(200)
+  registrationNumber String? @db.VarChar(100)
+  taxId            String?  @db.VarChar(100)
+  address          String?  @db.VarChar(500)
+  website          String?
+  logoUrl          String?
+  verified         Boolean  @default(false)
+  verifiedAt       DateTime?
+  verifiedBy       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AgentProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  name          String   @db.VarChar(100)
+  description   String?  @db.VarChar(2000)
+  avatarUrl     String?
+  apiKeyHash    String?
+  webhookUrl    String?
+  webhookSecret String?
+  skills        String[]
+  runtime       String?
+  sandbox       String?
+  isActive      Boolean  @default(true)
+  lastHeartbeat DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique @db.VarChar(255)
+  expires      DateTime
+  ipAddress    String?  @db.VarChar(45)
+  userAgent    String?  @db.VarChar(500)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+// ============ Task & Bid ============
+
+model Task {
+  id                String     @id @default(cuid())
+  publisherId      String
+  spec             Json
+  status           TaskStatus @default(DRAFT)
+  budget           Decimal    @db.Decimal(20, 8)
+  currency         String     @default("USDC")
+  chainId          Int
+  tokenAddress     String?
+  escrowAddress    String?
+  escrowTxHash     String?
+  escrowBlockNumber BigInt?
+  acceptedBidId    String?    @unique
+  assignedToId     String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  disputeId        String?    @unique
+  viewCount        Int        @default(0)
+  applicationCount Int        @default(0)
+  metadata         Json?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  publisher  User  @relation("PublishedTasks", fields: [publisherId], references: [id])
+  assignedTo User? @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  acceptedBid Bid? @relation("TaskAcceptedBid", fields: [acceptedBidId], references: [id])
+  bids       Bid[]
+  milestones TaskMilestone[]
+  reviews    Review[]
+  escrow     Escrow?
+  dispute    Dispute? @relation("TaskDispute")
+
+  @@index([publisherId])
+  @@index([status])
+  @@index([chainId])
+  @@index([createdAt])
+  @@index([budget])
+}
+
+enum TaskStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+model Bid {
+  id              String    @id @default(cuid())
+  taskId          String
+  agentId         String
+  price           Decimal   @db.Decimal(20, 8)
+  currency        String    @default("USDC")
+  proposal        String?   @db.VarChar(10000)
+  estimatedDays   Int?
+  status          BidStatus @default(PENDING)
+  rejectionReason String?
+  withdrawnAt     DateTime?
+  acceptedAt      DateTime?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agent User @relation(fields: [agentId], references: [id])
+  acceptedTask Task? @relation("TaskAcceptedBid")
+
+  @@index([taskId])
+  @@index([agentId])
+  @@index([status])
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model TaskMilestone {
+  id             String   @id @default(cuid())
+  taskId         String
+  name           String   @db.VarChar(200)
+  description    String?  @db.VarChar(5000)
+  amount         Decimal  @db.Decimal(20, 8)
+  currency       String   @default("USDC")
+  criteria       String
+  status         String   @default("pending")
+  submissionUrl  String?
+  submissionNotes String?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ============ Transaction & Escrow ============
+
+model Transaction {
+  id              String            @id @default(cuid())
+  userId          String
+  type            TransactionType
+  status          TransactionStatus @default(PENDING)
+  chainId         Int
+  tokenSymbol     String
+  tokenAddress    String?
+  amountRaw       String
+  decimals        Int
+  amountUsd       Decimal?          @db.Decimal(20, 8)
+  txHash          String?
+  blockNumber     BigInt?
+  fromAddress     String?
+  toAddress       String?
+  relatedTaskId   String?
+  relatedBidId    String?
+  relatedAdSlotId String?
+  relatedDisputeId String?
+  feeRaw          String?
+  feeUsd          Decimal?          @db.Decimal(20, 8)
+  metadata        Json?
+  confirmedAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([chainId, txHash])
+  @@index([relatedTaskId])
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  ESCROW_LOCK
+  ESCROW_RELEASE
+  ESCROW_REFUND
+  PLATFORM_FEE
+  AD_PAYMENT
+  SKILL_ROYALTY
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REVERTED
+}
+
+model WalletBalance {
+  id           String   @id @default(cuid())
+  userId       String
+  chainId      Int
+  tokenSymbol  String
+  tokenAddress String?
+  balanceRaw   String   @default("0")
+  decimals     Int
+  lockedRaw    String   @default("0")
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chainId, tokenSymbol, tokenAddress])
+  @@index([userId])
+}
+
+model Escrow {
+  id              String   @id @default(cuid())
+  taskId          String   @unique
+  contractAddress String
+  chainId         Int
+  tokenAddress    String
+  amountRaw       String
+  decimals        Int
+  publisherAddress String
+  workerAddress   String?
+  arbiterAddress  String?
+  status          String   @default("funded")
+  fundedTxHash    String
+  fundedBlockNumber BigInt
+  releasedTxHash  String?
+  refundedTxHash  String?
+  disputedAt      DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([chainId, contractAddress])
+}
+
+// ============ Reputation ============
+
+model HumanReputation {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  completedTasks   Int      @default(0)
+  cancelledTasks   Int      @default(0)
+  disputedTasks    Int      @default(0)
+  totalEarnedUsd   Decimal  @default(0) @db.Decimal(20, 8)
+  avgRating        Float    @default(0)
+  ratingCount      Int      @default(0)
+  onTimeDeliveryRate Float  @default(1)
+  responseTimeHours Float  @default(0)
+  portfolioScore   Float    @default(0)
+  githubStars      Int      @default(0)
+  githubContributions Int   @default(0)
+  skillCertifications Int   @default(0)
+  creditScore      Int      @default(100)
+  tier             String   @default("bronze")
+  lastCalculatedAt DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([creditScore])
+  @@index([tier])
+}
+
+model AgentReputation {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  successfulExecutions Int   @default(0)
+  failedExecutions Int      @default(0)
+  totalEarnedUsd   Decimal  @default(0) @db.Decimal(20, 8)
+  avgExecutionTimeMs Int    @default(0)
+  sandboxPassRate  Float    @default(1)
+  validationPassRate Float @default(1)
+  skillCertifications Int  @default(0)
+  uniqueSkills     Int      @default(0)
+  uptimePercentage Float    @default(100)
+  creditScore      Int      @default(100)
+  tier              String   @default("bronze")
+  lastCalculatedAt DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([creditScore])
+  @@index([tier])
+}
+
+model ReputationEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  workerType      WorkerType
+  eventType       String
+  scoreDelta      Int
+  reason          String   @db.VarChar(500)
+  relatedTaskId   String?
+  relatedSkillId  String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model SkillCertification {
+  id             String   @id @default(cuid())
+  userId         String
+  skillId        String
+  skillName      String   @db.VarChar(100)
+  level          String   @default("beginner")
+  score          Float
+  certifiedBy    String
+  certificateUrl String?
+  expiresAt      DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([skillId])
+}
+
+// ============ Review ============
+
+model Review {
+  id          String   @id @default(cuid())
+  taskId      String
+  reviewerId  String
+  recipientId String
+  rating      Int
+  comment     String?  @db.VarChar(2000)
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  task      Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reviewer  User @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+  recipient User @relation("ReviewRecipient", fields: [recipientId], references: [id])
+
+  @@unique([taskId, reviewerId, recipientId])
+  @@index([taskId])
+  @@index([recipientId])
+}
+
+// ============ Ad System ============
+
+model AdSlot {
+  id          String   @id @default(cuid())
+  type        String
+  placement   String   @db.VarChar(100)
+  title       String?  @db.VarChar(200)
+  description String?  @db.VarChar(500)
+  targeting   Json?
+  pricing     Json
+  isActive    Boolean  @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaigns   AdCampaign[]
+  impressions AdImpression[]
+  clicks      AdClick[]
+}
+
+model AdCampaign {
+  id           String   @id @default(cuid())
+  advertiserId String
+  slotId       String
+  creativeId   String?  @unique
+  name         String   @db.VarChar(100)
+  bidModel     String
+  bidAmount    Decimal  @db.Decimal(20, 8)
+  dailyBudget  Decimal? @db.Decimal(20, 8)
+  totalBudget  Decimal? @db.Decimal(20, 8)
+  spentAmount  Decimal  @default(0) @db.Decimal(20, 8)
+  targeting    Json?
+  status       String   @default("draft")
+  startDate    DateTime?
+  endDate      DateTime?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  rejectionReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  advertiser User @relation(fields: [advertiserId], references: [id])
+  slot       AdSlot @relation(fields: [slotId], references: [id])
+  creative   AdCreative? @relation(fields: [creativeId], references: [id])
+  impressions AdImpression[]
+  clicks      AdClick[]
+
+  @@index([advertiserId])
+  @@index([slotId])
+  @@index([status])
+}
+
+model AdCreative {
+  id           String   @id @default(cuid())
+  advertiserId String
+  name         String   @db.VarChar(100)
+  type         String
+  width        Int
+  height       Int
+  fileUrl      String
+  clickUrl     String
+  impressionTracker String?
+  clickTracker String?
+  altText      String?  @db.VarChar(200)
+  metadata     Json?
+  isApproved   Boolean  @default(false)
+  approvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  advertiser User @relation(fields: [advertiserId], references: [id])
+  campaign   AdCampaign?
+
+  @@index([advertiserId])
+}
+
+model AdImpression {
+  id          String   @id @default(cuid())
+  campaignId  String
+  slotId      String
+  creativeId  String
+  userId      String?
+  sessionId   String?
+  ipHash      String   @db.VarChar(64)
+  userAgent   String?  @db.VarChar(500)
+  referrer    String?
+  price       Decimal  @db.Decimal(20, 8)
+  currency    String
+  chainId     Int
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  slot    AdSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([slotId])
+  @@index([createdAt])
+}
+
+model AdClick {
+  id           String   @id @default(cuid())
+  impressionId String   @unique
+  campaignId   String
+  slotId       String
+  creativeId   String
+  userId       String?
+  sessionId    String?
+  ipHash       String   @db.VarChar(64)
+  userAgent    String?  @db.VarChar(500)
+  referrer     String?
+  isValid      Boolean  @default(true)
+  invalidReason String?
+  createdAt    DateTime @default(now())
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  slot    AdSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([slotId])
+  @@index([createdAt])
+}
+
+// ============ Dispute & Arbitration ============
+
+model Dispute {
+  id            String   @id @default(cuid())
+  taskId        String   @unique
+  initiatorId   String
+  respondentId  String
+  reason        String   @db.VarChar(5000)
+  evidence      Json
+  status        DisputeStatus @default(OPEN)
+  resolution    String?
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  arbitratorIds String[]
+  arbitratorVotes Json
+  escrowId      String?
+  arbitrationFee Decimal @default(0) @db.Decimal(20, 8)
+  feePaidBy     String?
+  appealable    Boolean  @default(true)
+  appealedAt    DateTime?
+  appealReason  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  task       Task @relation("TaskDispute", fields: [taskId], references: [id])
+  initiator  User @relation("DisputeInitiator", fields: [initiatorId], references: [id])
+  respondent User @relation("DisputeRespondent", fields: [respondentId], references: [id])
+
+  @@index([status])
+  @@index([initiatorId])
+  @@index([respondentId])
+}
+
+enum DisputeStatus {
+  OPEN
+  EVIDENCE_SUBMISSION
+  ARBITRATION
+  RESOLVED
+  APPEALED
+}
+
+model Arbitrator {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  specialties      String[]
+  languages        String[]
+  stakeAmount      Decimal  @default(0) @db.Decimal(20, 8)
+  totalCases       Int      @default(0)
+  correctVotes     Int      @default(0)
+  accuracyRate     Float    @default(0)
+  avgResolutionTimeHours Float @default(0)
+  isActive         Boolean  @default(true)
+  isVerified       Boolean  @default(false)
+  verifiedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============ Skill Market ============
+
+model SkillPackage {
+  id               String   @id @default(cuid())
+  authorId        String
+  manifest         Json
+  packageUrl      String
+  packageHash     String   @db.VarChar(128)
+  packageSize     Int
+  status           String   @default("pending")
+  downloadCount   Int      @default(0)
+  rating           Float    @default(0)
+  ratingCount     Int      @default(0)
+  totalRevenueUsd Decimal  @default(0) @db.Decimal(20, 8)
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  deprecatedAt     DateTime?
+  deprecationReason String?
+  securityScanStatus String @default("pending")
+  securityScanResult Json?
+  scannedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  author      User             @relation(fields: [authorId], references: [id])
+  versions    SkillVersion[]
+  reviews     SkillReview[]
+  invocations SkillInvocation[]
+
+  @@index([authorId])
+  @@index([status])
+  @@index([rating])
+}
+
+model SkillVersion {
+  id                String   @id @default(cuid())
+  skillId           String
+  version           String
+  manifest          Json
+  packageUrl        String
+  packageHash       String   @db.VarChar(128)
+  packageSize       Int
+  changelog         String?
+  isLatest          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  skill        SkillPackage     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  invocations  SkillInvocation[]
+
+  @@index([skillId])
+  @@index([isLatest])
+}
+
+model SkillInvocation {
+  id              String   @id @default(cuid())
+  skillId         String
+  skillVersionId  String
+  callerId        String
+  taskId          String?
+  input           Json
+  output          Json?
+  status          String   @default("pending")
+  executionTimeMs Int?
+  memoryUsedMb    Int?
+  costUsd         Decimal? @db.Decimal(20, 8)
+  error           String?
+  logs            String[]
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  skill        SkillPackage @relation(fields: [skillId], references: [id])
+  skillVersion SkillVersion @relation(fields: [skillVersionId], references: [id])
+  caller       User          @relation("SkillCaller", fields: [callerId], references: [id])
+
+  @@index([skillId])
+  @@index([callerId])
+  @@index([status])
+}
+
+model SkillReview {
+  id        String   @id @default(cuid())
+  skillId   String
+  userId    String
+  rating    Int
+  comment   String?  @db.VarChar(2000)
+  isVerifiedPurchase Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skill SkillPackage @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id])
+
+  @@unique([skillId, userId])
+  @@index([skillId])
+}
+
+// ============ Notification ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String   @db.VarChar(200)
+  content   String   @db.VarChar(2000)
+  link      String?
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}

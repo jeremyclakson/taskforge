@@ -1,0 +1,21 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - "prisma"
+  - "esbuild"
+  - "keccak"
+  - "bufferutil"
+  - "utf-8-validate"
+  - "unrs-resolver"
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  bufferutil: true
+  esbuild: true
+  keccak: true
+  prisma: true
+  unrs-resolver: true
+  utf-8-validate: true

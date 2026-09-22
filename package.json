@@ -1,0 +1,32 @@
+{
+  "name": "taskforge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TaskForge - AI Agent & Human Developer Marketplace with Crypto Payments",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:push": "turbo run db:push",
+    "db:studio": "turbo run db:studio",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.3.0"
+  },
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@x402/core": "^2.26.0",
+    "@x402/evm": "^2.26.0",
+    "@x402/svm": "^2.26.0"
+  }
+}

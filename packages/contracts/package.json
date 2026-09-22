@@ -1,0 +1,16 @@
+{
+  "name": "@agent-platform/contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for AgentTask Platform - Escrow, Token, Reputation",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "deploy:base": "forge script script/Deploy.sol --rpc-url $BASE_RPC_URL --private-key $PRIVATE_KEY",
+    "deploy:arbitrum": "forge script script/Deploy.sol --rpc-url $ARBITRUM_RPC_URL --private-key $PRIVATE_KEY",
+    "deploy:optimism": "forge script script/Deploy.sol --rpc-url $OPTIMISM_RPC_URL --private-key $PRIVATE_KEY",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
