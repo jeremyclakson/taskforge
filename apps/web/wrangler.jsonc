@@ -7,6 +7,13 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
+  "routes": [
+    {
+      "pattern": "taskforge.bot.cd/*",
+      "zone_name": "bot.cd",
+      "zone_id": "4037928075"
+    }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
