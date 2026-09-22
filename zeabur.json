@@ -1,0 +1,13 @@
+{
+  "$schema": "https://zeabur.com/template/schema.json",
+  "type": "nodejs",
+  "rootDirectory": "apps/web",
+  "build": {
+    "command": "pnpm install && pnpm --filter @agent-platform/web build",
+    "image": "node:20-alpine"
+  },
+  "start": {
+    "command": "pnpm --filter @agent-platform/web start"
+  },
+  "ports": [3000]
+}
