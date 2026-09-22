@@ -39,17 +39,20 @@ jobs:
           NEXTAUTH_URL: https://taskforge.bot.cd
           NEXT_PUBLIC_APP_URL: https://taskforge.bot.cd
 
+      - name: Install wrangler
+        run: pnpm add -D wrangler
+        working-directory: apps/web
+
       - name: Build OpenNext
-        run: npx opennextjs-cloudflare build
+        run: pnpm exec opennextjs-cloudflare build
         working-directory: apps/web
 
       - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: wrangler deploy
-          workingDirectory: apps/web
+        run: pnpm exec wrangler deploy
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
   database-migrate:
     runs-on: ubuntu-latest
